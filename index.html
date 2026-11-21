@@ -1,11 +1,11 @@
 
 <script type="module">
-import { Client, handle_file } from "https://esm.sh/@gradio/client";
-
-let mode = "photo";
-let videoUrl = null;
+import { Client, handle_file } from
+"https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
 const $ = id => document.getElementById(id);
+let mode = "photo";
+let videoUrl = null;
 
 function setMode(m) {
   mode = m;
@@ -18,34 +18,66 @@ $("photoTab").onclick = () => setMode("photo");
 $("textTab").onclick = () => setMode("text");
 
 $("photo").onchange = () => {
-  const f = $("photo").files[0];
-  if (!f) return;
+  const file = $("photo").files[0];
+  if (!file) return;
 
-  if (f.size > 10 * 1024 * 1024) {
+  if (file.size > 10 * 1024 * 1024) {
     alert("Фото должно быть меньше 10 МБ");
     return;
   }
 
-  const r = new FileReader();
-  r.onload = () => {
-    $("preview").src = r.result;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("preview").src = reader.result;
     $("preview").style.display = "block";
-    $("fileName").textContent = f.name;
+    $("fileName").textContent = file.name;
   };
-  r.readAsDataURL(f);
+  reader.readAsDataURL(file);
 };
 
+function findVideo(data) {
+  if (!data) return null;
+
+  if (typeof data === "string") {
+    return data.startsWith("http") ? data : null;
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const found = findVideo(item);
+      if (found) return found;
+    }
+  }
+
+  if (typeof data === "object") {
+    if (data.url) return data.url;
+    if (data.video) return findVideo(data.video);
+
+    for (const value of Object.values(data)) {
+      const found = findVideo(value);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
 $("generate").onclick = async () => {
-  const prompt = $("prompt").value.trim();
   const file = $("photo").files[0];
+  const prompt = $("prompt").value.trim();
 
   if (!prompt) {
     alert("Напиши описание видео");
     return;
   }
 
-  if (!file) {
+  if (mode === "photo" && !file) {
     alert("Сначала загрузи фотографию");
+    return;
+  }
+
+  if (mode !== "photo") {
+    alert("Wan 2.2 сейчас подключён для генерации из фото");
     return;
   }
 
@@ -55,57 +87,41 @@ $("generate").onclick = async () => {
   $("status").textContent = "Подключаем Wan 2.2...";
 
   try {
-    const client = await Client.connect("JCisHERE/wan2-2-i2v-v3");
+    const client = await Client.connect(
+      "JCisHERE/wan2-2-i2v-v3"
+    );
 
-    $("status").textContent = "Загружаем фото и создаём видео. Это может занять несколько минут...";
+    $("status").textContent =
+      "Фото отправлено. Генерируем видео, подожди...";
 
-    const result = await client.predict("/generate_video", {
-      input_image: await handle_file(file),
-      last_image: null,
-      prompt: prompt,
-      steps: 6,
-      negative_prompt: "",
-      duration_seconds: Number($("duration").value.replace("s", "")),
-      guidance_scale: 1,
-      guidance_scale_2: 1,
-      seed: 42,
-      randomize_seed: true,
-      quality: 5,
-      scheduler: "UniPCMultistep",
-      flow_shift: 6,
-      frame_multiplier: 16,
-      safe_mode: true,
-      lora_groups: [],
-      auto_lora_enabled: false,
-      video_component: true
-    });
-
-    const findVideo = value => {
-      if (!value) return null;
-      if (typeof value === "string" && value.startsWith("http")) return value;
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const found = findVideo(item);
-          if (found) return found;
-        }
-      }
-      if (typeof value === "object") {
-        if (value.url) return value.url;
-        if (value.video?.url) return value.video.url;
-        if (value.path) return value.path;
-        for (const item of Object.values(value)) {
-          const found = findVideo(item);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
+    const result = await client.predict("/generate_video", [
+      await handle_file(file),
+      null,
+      prompt,
+      8,
+      "",
+      Number($("duration").value.replace("s", "")),
+      1,
+      1,
+      42,
+      true,
+      5,
+      "UniPCMultistep",
+      6,
+      16,
+      true,
+      [],
+      false,
+      true
+    ]);
 
     const url = findVideo(result.data);
 
     if (!url) {
-      throw new Error("Wan 2.2 не вернул ссылку на видео");
+      throw new Error("Сервер не вернул ссылку на видео");
     }
+
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
 
     $("result").src = url;
     $("result").style.display = "block";
@@ -114,9 +130,11 @@ $("generate").onclick = async () => {
     $("resultPanel").hidden = false;
     $("status").textContent = "Видео готово! 🎉";
 
-  } catch (e) {
-    console.error(e);
-    $("status").textContent = "Ошибка: " + (e.message || "Не удалось создать видео");
+  } catch (error) {
+    console.error(error);
+    $("status").textContent =
+      "Ошибка подключения или генерации: " +
+      (error.message || String(error));
   } finally {
     btn.disabled = false;
   }
