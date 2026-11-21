@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090914">
+<title>KOTE AI VIDEO</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#090914;color:#fff;font-family:Arial,sans-serif}
+header{padding:20px;text-align:center;background:#111020;border-bottom:1px solid #292640}
+.logo{font-size:27px;font-weight:900;letter-spacing:2px}
+.logo span{color:#a78bfa}
+.sub{color:#aaa;font-size:11px;letter-spacing:2px;margin-top:7px}
+main{max-width:680px;margin:auto;padding:20px 15px}
+h2{font-size:24px;margin:8px 0}
+.muted{color:#999;font-size:13px;line-height:1.5}
+.tabs{display:flex;gap:9px;margin:22px 0}
+button{border:0;cursor:pointer;color:white;font-weight:bold}
+.tab{flex:1;padding:14px 8px;border-radius:12px;background:#211e35}
+.tab.active{background:#8055ed}
+.panel{background:#151426;border:1px solid #302b49;border-radius:17px;padding:17px;margin:14px 0}
+label{display:block;font-weight:bold;font-size:14px;margin-bottom:10px}
+textarea,select,input[type=file]{width:100%;background:#0c0b18;color:white;border:1px solid #39344f;border-radius:11px;padding:13px}
+textarea{height:120px;resize:vertical;line-height:1.5}
+select{margin-bottom:12px}
+.preview{display:none;width:100%;max-height:260px;object-fit:contain;margin-top:12px;border-radius:12px}
+#fileName{font-size:12px;color:#aaa;margin-top:8px}
+.generate{width:100%;padding:17px;border-radius:13px;font-size:16px;background:linear-gradient(100deg,#7046e9,#ad4de9);margin-top:12px}
+.generate:disabled{opacity:.5}
+#status{text-align:center;color:#c4b2ff;white-space:pre-wrap;margin:17px 0;line-height:1.5}
+video{width:100%;border-radius:13px;background:#000}
+#result{display:none}
+.download{display:none;text-align:center;background:#292044;color:white;padding:15px;border-radius:12px;text-decoration:none;margin-top:12px}
+.small{font-size:11px;color:#888;line-height:1.5}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+.pill{display:inline-block;padding:7px 10px;border-radius:20px;background:#28213f;color:#c8b5ff;font-size:11px}
+footer{text-align:center;color:#777;font-size:11px;padding:25px}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">KOTE <span>AI VIDEO</span></div>
+ <div class="sub">YOUR PERSONAL AI VIDEO STUDIO</div>
+</header>
+
+<main>
+ <span class="pill">✦ GOOGLE GEMINI OMNI FLASH</span>
+ <h2>Создай своё видео</h2>
+ <p class="muted">Превращай идеи и фотографии в кинематографические видео.</p>
+
+ <div class="tabs">
+  <button class="tab active" id="photoTab">📸 Фото → Видео</button>
+  <button class="tab" id="textTab">✍️ Текст → Видео</button>
+ </div>
+
+ <section class="panel" id="photoPanel">
+  <label>Загрузи фотографию</label>
+  <input id="photo" type="file" accept="image/jpeg,image/png,image/webp">
+  <div id="fileName">JPG, PNG или WEBP · до 10 МБ</div>
+  <img id="preview" class="preview">
+ </section>
+
+ <section class="panel">
+  <label>Опиши своё видео</label>
+  <textarea id="prompt" maxlength="3000"
+   placeholder="Например: Герой выпрыгивает из окна, камера следует за ним, он приземляется на землю и бежит к машине. Реалистичное кино, динамичная камера..."></textarea>
+  <p class="small">Совет: описывай движение персонажа, камеры, освещение и атмосферу.</p>
+
+  <div class="row">
+   <div>
+    <label>Длительность</label>
+    <select id="duration">
+     <option value="5s">5 секунд</option>
+     <option value="8s" selected>8 секунд</option>
+     <option value="10s">10 секунд</option>
+     <option value="15s">15 секунд</option>
+    </select>
+   </div>
+   <div>
+    <label>Формат</label>
+    <select id="ratio">
+     <option value="9:16">Вертикальный 9:16</option>
+     <option value="16:9">Горизонтальный 16:9</option>
+    </select>
+   </div>
+  </div>
+ </section>
+
+ <button class="generate" id="generate">✨ СОЗДАТЬ ВИДЕО</button>
+ <div id="status">Готов к созданию твоего видео</div>
+
+ <section class="panel" id="resultPanel" hidden>
+  <h3>🎬 Твоё видео готово!</h3>
+  <video id="result" controls playsinline></video>
+  <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
+ </section>
+
+ <p class="small">Модель: Gemini Omni Flash · Генерация требует API-ключа Google и может тарифицироваться. Не публикуй секретный ключ.</p>
+</main>
+<footer>KOTE AI VIDEO © 2026</footer>
+
+<script>
+const API_URL="ВСТАВЬ_АДРЕС_WORKER";
+let mode="photo", image=null, videoUrl=null;
+
+const $=id=>document.getElementById(id);
+
+function setMode(m){
+ mode=m;
+ $("photoPanel").style.display=m==="photo"?"block":"none";
+ $("photoTab").classList.toggle("active",m==="photo");
+ $("textTab").classList.toggle("active",m==="text");
+}
+$("photoTab").onclick=()=>setMode("photo");
+$("textTab").onclick=()=>setMode("text");
+
+$("photo").onchange=()=>{
+ const f=$("photo").files[0];
+ if(!f)return;
+ if(f.size>10*1024*1024){alert("Фото должно быть меньше 10 МБ");return}
+ if(!["image/jpeg","image/png","image/webp"].includes(f.type)){alert("Нужен JPG, PNG или WEBP");return}
+ const r=new FileReader();
+ r.onload=()=>{
+  image={data:r.result.split(",")[1],mime_type:f.type};
+  $("preview").src=r.result;
+  $("preview").style.display="block";
+  $("fileName").textContent=f.name;
+ };
+ r.readAsDataURL(f);
+};
+
+function showError(e){
+ $("status").textContent="Ошибка: "+(e.message||"Не удалось создать видео");
+}
+
+$("generate").onclick=async()=>{
+ const prompt=$("prompt").value.trim();
+ if(!prompt){alert("Напиши описание видео");return}
+ if(mode==="photo"&&!image){alert("Сначала загрузи фотографию");return}
+ if(!API_URL.startsWith("https://")||API_URL.includes("ВСТАВЬ_")){
+  alert("Сначала подключи Cloudflare Worker");return;
+ }
+
+ const btn=$("generate");
+ btn.disabled=true;
+ $("resultPanel").hidden=true;
+ $("result").style.display="none";
+ $("download").style.display="none";
+ $("status").textContent="Отправляем запрос в Gemini Omni Flash...";
+
+ try{
+  const response=await fetch(API_URL,{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    mode,prompt,image,
+    duration:$("duration").value,
+    ratio:$("ratio").value
+   })
+  });
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Ошибка API");
+  if(!data.video)throw new Error("Google не вернул видео");
+
+  const binary=atob(data.video);
+  const bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  const blob=new Blob([bytes],{type:"video/mp4"});
+
+  if(videoUrl)URL.revokeObjectURL(videoUrl);
+  videoUrl=URL.createObjectURL(blob);
+  $("result").src=videoUrl;
+  $("result").style.display="block";
+  $("download").href=videoUrl;
+  $("download").style.display="block";
+  $("resultPanel").hidden=false;
+  $("status").textContent="Готово! Твоё видео создано 🎉";
+ }catch(e){showError(e)}
+ finally{btn.disabled=false}
+};
+</script>
+</body>
+   </html>
