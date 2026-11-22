@@ -110,9 +110,10 @@ let videoUrl = null;
 const clients = {};
 
 function setStatus(message) { $("status").textContent = message; }
-function getClient(space) {
-  if (!clients[space]) clients[space] = Client.connect(space);
-  return clients[space];
+function getClient(space, token) {
+  const key = space + (token ? ":authenticated" : ":anonymous");
+  if (!clients[key]) clients[key] = Client.connect(space, token ? { token } : {});
+  return clients[key];
 }
 $("photo").addEventListener("change", () => {
   const file = $("photo").files && $("photo").files[0];
@@ -163,16 +164,18 @@ $("generate").addEventListener("click", async () => {
 
   try {
     const duration = Number($("duration").value);
+    const hfToken = $("hfToken").value.trim();
+    if (hfToken && !hfToken.startsWith("hf_")) throw new Error("Токен должен начинаться с hf_.");
     let result;
     if (model === "wan") {
-      const client = await getClient(WAN_SPACE);
+      const client = await getClient(WAN_SPACE, hfToken);
       setStatus("Отправляем фото на сервер Wan 2.2… Не закрывай страницу.");
       result = await client.predict("/generate_video", [
         await handle_file(imageFile), null, prompt, 4, "", duration,
         1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
       ]);
     } else {
-      const client = await getClient(COG_SPACE);
+      const client = await getClient(COG_SPACE, hfToken);
       setStatus("Подключаем CogVideoX-5B. Первый запуск может занять время…");
       result = await client.predict("/generate", [
         prompt,
