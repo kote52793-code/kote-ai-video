@@ -27,8 +27,8 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
     if (origin && origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403, origin);
-    if (!env.AGnes_API_KEY && !env.AGNES_API_KEY) return json({ error: "Cloudflare secret AGNES_API_KEY is not configured" }, 500, origin);
-    const key = env.AGNES_API_KEY || env.AGnes_API_KEY;
+    if (!env.AGNES_API_KEY) return json({ error: "Cloudflare secret AGNES_API_KEY is not configured" }, 500, origin);
+    const key = env.AGNES_API_KEY;
 
     try {
       if (request.method === "POST" && url.pathname.endsWith("/generate")) {
