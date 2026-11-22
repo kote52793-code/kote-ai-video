@@ -49,12 +49,12 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 <main>
  <span class="pill">✦ KOTE AI · TWO VIDEO ENGINES</span>
  <h2>Создай своё видео</h2>
- <p class="muted">Выбери модель. Wan 2.2 работает с фотографией, LTX-2.5 умеет создавать видео из текста и фотографии.</p>
+ <p class="muted">Выбери модель. Wan 2.2 работает с фотографией, CogVideoX-5B создаёт видео из текста.</p>
 
 
 
  <section class="panel" id="photoPanel">
-  <label>Загрузи фотографию (для LTX-2.5 необязательно)</label>
+  <label>Загрузи фотографию (для CogVideoX не требуется)</label>
   <input id="photo" type="file" accept="image/jpeg,image/png,image/webp">
   <div id="fileName">JPG, PNG или WEBP · до 10 МБ</div>
   <img id="preview" class="preview">
@@ -80,7 +80,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
     <label>Модель</label>
     <select id="model">
      <option value="wan">Wan 2.2 · фото → видео</option>
-     <option value="ltx">LTX-2.5 · текст/фото → видео + звук</option>
+     <option value="ltx">CogVideoX-5B · текст → видео</option>
     </select>
    </div>
   </div>
@@ -95,7 +95,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
   <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
  </section>
 
- <p class="small">Wan 2.2 и LTX-2.5 работают на удалённых серверах Hugging Face. Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
+ <p class="small">Wan 2.2 и CogVideoX-5B работают на удалённых серверах Hugging Face. CogVideoX создаёт короткое видео примерно на 3 секунды из текста. Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
@@ -103,7 +103,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
 const WAN_SPACE = "JCisHERE/wan2-2-i2v-v3";
-const LTX_SPACE = "Lightricks/LTX-2.5";
+const COG_SPACE = "kaidjuric/cogvideox-5b-text-to-video";
 const $ = id => document.getElementById(id);
 let imageFile = null;
 let videoUrl = null;
@@ -172,19 +172,15 @@ $("generate").addEventListener("click", async () => {
         1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
       ]);
     } else {
-      const client = await getClient(LTX_SPACE);
-      setStatus("Подключаем LTX-2.5. Сервер может запускаться несколько минут…");
-      result = await client.predict("/run", [
+      const client = await getClient(COG_SPACE);
+      setStatus("Подключаем CogVideoX-5B. Первый запуск может занять время…");
+      result = await client.predict("/generate", [
         prompt,
-        imageFile ? await handle_file(imageFile) : null,
-        832,
-        1472,
-        duration,
-        42,
-        "conv",
-        false,
-        true,
-        true
+        30,
+        25,
+        6,
+        "",
+        -1
       ]);
     }
 
@@ -199,7 +195,7 @@ $("generate").addEventListener("click", async () => {
     $("download").href = url;
     $("download").style.display = "block";
     $("resultPanel").hidden = false;
-    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : "LTX-2.5") + "! Если плеер не открылся, нажми «Скачать MP4».");
+    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : "CogVideoX-5B") + "! Если плеер не открылся, нажми «Скачать MP4».");
   } catch (error) {
     console.error(error);
     const message = error && error.message ? error.message : String(error);
