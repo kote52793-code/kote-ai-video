@@ -47,14 +47,11 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 </header>
 
 <main>
- <span class="pill">✦ WAN 2.2 · FREE AI VIDEO</span>
+ <span class="pill">✦ WAN 2.2 · IMAGE TO VIDEO</span>
  <h2>Создай своё видео</h2>
- <p class="muted">Превращай идеи и фотографии в кинематографические видео.</p>
+ <p class="muted">Загрузи фотографию и опиши, как она должна ожить.</p>
 
- <div class="tabs">
-  <button class="tab active" id="photoTab">📸 Фото → Видео</button>
-  <button class="tab" id="textTab">✍️ Текст → Видео</button>
- </div>
+
 
  <section class="panel" id="photoPanel">
   <label>Загрузи фотографию</label>
@@ -73,18 +70,15 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
    <div>
     <label>Длительность</label>
     <select id="duration">
-     <option value="5s">5 секунд</option>
-     <option value="8s" selected>8 секунд</option>
-     <option value="10s">10 секунд</option>
-     <option value="15s">15 секунд</option>
+     <option value="2" selected>2 секунды</option>
+     <option value="3">3 секунды</option>
+     <option value="3.5">3,5 секунды</option>
+     <option value="5">5 секунд</option>
     </select>
    </div>
    <div>
-    <label>Формат</label>
-    <select id="ratio">
-     <option value="9:16">Вертикальный 9:16</option>
-     <option value="16:9">Горизонтальный 16:9</option>
-    </select>
+    <label>Модель</label>
+    <div class="small">Wan 2.2 · генерация из фотографии</div>
    </div>
   </div>
  </section>
@@ -98,89 +92,115 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
   <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
  </section>
 
- <p class="small">Модель: Wan 2.2 · Подключение генерации настраивается.</p>
+ <p class="small">Генерация выполняется на Hugging Face. Доступность зависит от состояния бесплатного GPU-сервера и его лимитов.</p>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
-<script>
-const API_URL="ВСТАВЬ_АДРЕС_WORKER";
-let mode="photo", image=null, videoUrl=null;
+<script type="module">
+import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
-const $=id=>document.getElementById(id);
+const SPACE = "JCisHERE/wan2-2-i2v-v3";
+const $ = id => document.getElementById(id);
+let imageFile = null;
+let videoUrl = null;
+let clientPromise = null;
 
-function setMode(m){
- mode=m;
- $("photoPanel").style.display=m==="photo"?"block":"none";
- $("photoTab").classList.toggle("active",m==="photo");
- $("textTab").classList.toggle("active",m==="text");
+function setStatus(message) { $("status").textContent = message; }
+function getClient() {
+  if (!clientPromise) clientPromise = Client.connect(SPACE);
+  return clientPromise;
 }
-$("photoTab").onclick=()=>setMode("photo");
-$("textTab").onclick=()=>setMode("text");
+$("photo").addEventListener("change", () => {
+  const file = $("photo").files && $("photo").files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    alert("Фото должно быть меньше 10 МБ");
+    $("photo").value = "";
+    imageFile = null;
+    return;
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    alert("Нужен JPG, PNG или WEBP");
+    $("photo").value = "";
+    imageFile = null;
+    return;
+  }
+  imageFile = file;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("preview").src = reader.result;
+    $("preview").style.display = "block";
+    $("fileName").textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+});
 
-$("photo").onchange=()=>{
- const f=$("photo").files[0];
- if(!f)return;
- if(f.size>10*1024*1024){alert("Фото должно быть меньше 10 МБ");return}
- if(!["image/jpeg","image/png","image/webp"].includes(f.type)){alert("Нужен JPG, PNG или WEBP");return}
- const r=new FileReader();
- r.onload=()=>{
-  image={data:r.result.split(",")[1],mime_type:f.type};
-  $("preview").src=r.result;
-  $("preview").style.display="block";
-  $("fileName").textContent=f.name;
- };
- r.readAsDataURL(f);
-};
-
-function showError(e){
- $("status").textContent="Ошибка: "+(e.message||"Не удалось создать видео");
+function getVideoUrl(item) {
+  if (!item) return null;
+  if (typeof item === "string") return item;
+  if (typeof item.url === "string") return item.url;
+  if (typeof item.path === "string" && /^https?:/.test(item.path)) return item.path;
+  if (typeof item.video === "string") return item.video;
+  return null;
 }
 
-$("generate").onclick=async()=>{
- const prompt=$("prompt").value.trim();
- if(!prompt){alert("Напиши описание видео");return}
- if(mode==="photo"&&!image){alert("Сначала загрузи фотографию");return}
- if(!API_URL.startsWith("https://")||API_URL.includes("ВСТАВЬ_")){
-  alert("Сначала подключи сервер генерации");return;
- }
+$("generate").addEventListener("click", async () => {
+  const prompt = $("prompt").value.trim();
+  if (!imageFile) { alert("Сначала загрузи фотографию"); return; }
+  if (!prompt) { alert("Напиши описание движения"); return; }
 
- const btn=$("generate");
- btn.disabled=true;
- $("resultPanel").hidden=true;
- $("result").style.display="none";
- $("download").style.display="none";
- $("status").textContent="Отправляем запрос...";
+  const button = $("generate");
+  button.disabled = true;
+  $("resultPanel").hidden = true;
+  $("result").removeAttribute("src");
+  $("download").style.display = "none";
+  setStatus("Подключаем Wan 2.2… Первый запуск может занять время.");
 
- try{
-  const response=await fetch(API_URL,{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({
-    mode,prompt,image,
-    duration:$("duration").value,
-    ratio:$("ratio").value
-   })
-  });
-  const data=await response.json();
-  if(!response.ok)throw new Error(data.error||"Ошибка API");
-  if(!data.video)throw new Error("Сервер не вернул видео");
+  try {
+    const client = await getClient();
+    setStatus("Отправляем фотографию на сервер Wan 2.2. Не закрывай страницу…");
+    const duration = Number($("duration").value);
+    const result = await client.predict("/generate_video", [
+      await handle_file(imageFile),
+      null,
+      prompt,
+      4,
+      "",
+      duration,
+      1,
+      1,
+      42,
+      true,
+      5,
+      "UniPCMultistep",
+      3,
+      16,
+      true,
+      [],
+      true,
+      true
+    ]);
 
-  const binary=atob(data.video);
-  const bytes=new Uint8Array(binary.length);
-  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-  const blob=new Blob([bytes],{type:"video/mp4"});
+    const output = result && result.data ? result.data[0] : null;
+    const url = getVideoUrl(output) || getVideoUrl(result && result.data ? result.data[1] : null);
+    if (!url) throw new Error("Сервер ответил, но ссылка на видео не найдена. Ответ: " + JSON.stringify(result.data).slice(0, 500));
 
-  if(videoUrl)URL.revokeObjectURL(videoUrl);
-  videoUrl=URL.createObjectURL(blob);
-  $("result").src=videoUrl;
-  $("result").style.display="block";
-  $("download").href=videoUrl;
-  $("download").style.display="block";
-  $("resultPanel").hidden=false;
-  $("status").textContent="Готово! Твоё видео создано 🎉";
- }catch(e){showError(e)}
- finally{btn.disabled=false}
-};
+    if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
+    videoUrl = url;
+    $("result").src = url;
+    $("result").style.display = "block";
+    $("download").href = url;
+    $("download").style.display = "block";
+    $("resultPanel").hidden = false;
+    setStatus("Видео создано! Если плеер не открылся, нажми «Скачать MP4».");
+  } catch (error) {
+    console.error(error);
+    const message = error && error.message ? error.message : String(error);
+    setStatus("Не удалось создать видео: " + message + "\nПопробуй ещё раз позже: бесплатный GPU-сервер может быть занят или недоступен.");
+  } finally {
+    button.disabled = false;
+  }
+});
 </script>
 </body>
     </html>
