@@ -47,14 +47,14 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 </header>
 
 <main>
- <span class="pill">✦ WAN 2.2 · IMAGE TO VIDEO</span>
+ <span class="pill">✦ KOTE AI · TWO VIDEO ENGINES</span>
  <h2>Создай своё видео</h2>
- <p class="muted">Загрузи фотографию и опиши, как она должна ожить.</p>
+ <p class="muted">Выбери модель. Wan 2.2 работает с фотографией, LTX-2.5 умеет создавать видео из текста и фотографии.</p>
 
 
 
  <section class="panel" id="photoPanel">
-  <label>Загрузи фотографию</label>
+  <label>Загрузи фотографию (для LTX-2.5 необязательно)</label>
   <input id="photo" type="file" accept="image/jpeg,image/png,image/webp">
   <div id="fileName">JPG, PNG или WEBP · до 10 МБ</div>
   <img id="preview" class="preview">
@@ -78,7 +78,10 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
    </div>
    <div>
     <label>Модель</label>
-    <div class="small">Wan 2.2 · генерация из фотографии</div>
+    <select id="model">
+     <option value="wan">Wan 2.2 · фото → видео</option>
+     <option value="ltx">LTX-2.5 · текст/фото → видео + звук</option>
+    </select>
    </div>
   </div>
  </section>
@@ -92,23 +95,24 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
   <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
  </section>
 
- <p class="small">Генерация выполняется на Hugging Face. Доступность зависит от состояния бесплатного GPU-сервера и его лимитов.</p>
+ <p class="small">Wan 2.2 и LTX-2.5 работают на удалённых серверах Hugging Face. Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
 <script type="module">
 import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
-const SPACE = "JCisHERE/wan2-2-i2v-v3";
+const WAN_SPACE = "JCisHERE/wan2-2-i2v-v3";
+const LTX_SPACE = "Lightricks/LTX-2.5";
 const $ = id => document.getElementById(id);
 let imageFile = null;
 let videoUrl = null;
-let clientPromise = null;
+const clients = {};
 
 function setStatus(message) { $("status").textContent = message; }
-function getClient() {
-  if (!clientPromise) clientPromise = Client.connect(SPACE);
-  return clientPromise;
+function getClient(space) {
+  if (!clients[space]) clients[space] = Client.connect(space);
+  return clients[space];
 }
 $("photo").addEventListener("change", () => {
   const file = $("photo").files && $("photo").files[0];
@@ -146,7 +150,8 @@ function getVideoUrl(item) {
 
 $("generate").addEventListener("click", async () => {
   const prompt = $("prompt").value.trim();
-  if (!imageFile) { alert("Сначала загрузи фотографию"); return; }
+  const model = $("model").value;
+  if (model === "wan" && !imageFile) { alert("Для Wan 2.2 сначала загрузи фотографию"); return; }
   if (!prompt) { alert("Напиши описание движения"); return; }
 
   const button = $("generate");
@@ -157,29 +162,31 @@ $("generate").addEventListener("click", async () => {
   setStatus("Подключаем Wan 2.2… Первый запуск может занять время.");
 
   try {
-    const client = await getClient();
-    setStatus("Отправляем фотографию на сервер Wan 2.2. Не закрывай страницу…");
     const duration = Number($("duration").value);
-    const result = await client.predict("/generate_video", [
-      await handle_file(imageFile),
-      null,
-      prompt,
-      4,
-      "",
-      duration,
-      1,
-      1,
-      42,
-      true,
-      5,
-      "UniPCMultistep",
-      3,
-      16,
-      true,
-      [],
-      true,
-      true
-    ]);
+    let result;
+    if (model === "wan") {
+      const client = await getClient(WAN_SPACE);
+      setStatus("Отправляем фото на сервер Wan 2.2… Не закрывай страницу.");
+      result = await client.predict("/generate_video", [
+        await handle_file(imageFile), null, prompt, 4, "", duration,
+        1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
+      ]);
+    } else {
+      const client = await getClient(LTX_SPACE);
+      setStatus("Подключаем LTX-2.5. Сервер может запускаться несколько минут…");
+      result = await client.predict("/run", [
+        prompt,
+        imageFile ? await handle_file(imageFile) : null,
+        832,
+        1472,
+        duration,
+        42,
+        "conv",
+        false,
+        true,
+        true
+      ]);
+    }
 
     const output = result && result.data ? result.data[0] : null;
     const url = getVideoUrl(output) || getVideoUrl(result && result.data ? result.data[1] : null);
@@ -192,7 +199,7 @@ $("generate").addEventListener("click", async () => {
     $("download").href = url;
     $("download").style.display = "block";
     $("resultPanel").hidden = false;
-    setStatus("Видео создано! Если плеер не открылся, нажми «Скачать MP4».");
+    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : "LTX-2.5") + "! Если плеер не открылся, нажми «Скачать MP4».");
   } catch (error) {
     console.error(error);
     const message = error && error.message ? error.message : String(error);
