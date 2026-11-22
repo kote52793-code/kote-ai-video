@@ -38,15 +38,23 @@ video{width:100%;border-radius:13px;background:#000}
 .row>*{flex:1;min-width:0}
 .pill{display:inline-block;padding:7px 10px;border-radius:20px;background:#28213f;color:#c8b5ff;font-size:11px}
 footer{text-align:center;color:#777;font-size:11px;padding:25px}
+.chat-bubble{font-size:14px}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
 <header>
  <div class="logo">KOTE <span>AI VIDEO</span></div>
- <div class="sub">YOUR PERSONAL AI VIDEO STUDIO</div>
+ <div class="sub">YOUR PERSONAL AI STUDIO</div>
 </header>
 
 <main>
+ <div class="tabs" role="tablist" aria-label="Разделы KOTE AI">
+  <button class="tab active" id="videoTab" type="button" role="tab" aria-selected="true">🎬 Видео</button>
+  <button class="tab" id="chatTab" type="button" role="tab" aria-selected="false">💬 Разговорный ИИ</button>
+ </div>
+
+ <section id="videoSection">
  <span class="pill">✦ KOTE AI · WAN VIDEO ENGINE</span>
  <h2>Создай своё видео</h2>
  <p class="muted">Wan 2.2 создаёт видео из загруженной фотографии и текстового описания.</p>
@@ -100,9 +108,30 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
  </section>
 
  <p class="small">Wan 2.2 работает на удалённом сервере Hugging Face. Бесплатная очередь и GPU-квота ограничены; генерация доступна, когда сервер и квота доступны.</p>
+ </section>
+
+ <section id="chatSection" hidden>
+  <span class="pill">✦ KOTE AI · CHAT</span>
+  <h2>Поговорим?</h2>
+  <p class="muted">Задавай вопросы, проси объяснить сложное или просто общайся. Для работы ИИ использует Puter; при первом запросе может понадобиться вход в аккаунт Puter.</p>
+  <section class="panel">
+   <div id="chatMessages" aria-live="polite" style="display:flex;flex-direction:column;gap:12px;min-height:220px;max-height:55vh;overflow-y:auto;padding:4px 2px">
+    <div class="chat-bubble assistant">Привет! Я KOTE AI. Чем могу помочь? 🐾</div>
+   </div>
+   <label for="chatInput" style="margin-top:16px">Твоё сообщение</label>
+   <textarea id="chatInput" maxlength="5000" style="height:90px" placeholder="Напиши сообщение..."></textarea>
+   <div class="row" style="margin-top:10px">
+    <button class="tab" id="clearChat" type="button">Очистить</button>
+    <button class="generate" id="sendChat" type="button" style="margin-top:0">Отправить ➤</button>
+   </div>
+   <div id="chatStatus" class="small" role="status" style="margin-top:10px;text-align:center">ИИ готов к общению</div>
+  </section>
+  <p class="small">Примечание: доступность моделей и возможные лимиты зависят от Puter. Не отправляй в чат пароли, токены и другие секреты.</p>
+ </section>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
+<script src="https://js.puter.com/v2/"></script>
 <script type="module">
 import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
@@ -111,6 +140,79 @@ const $ = id => document.getElementById(id);
 let imageFile = null;
 let videoUrl = null;
 const clients = {};
+const chatHistory = [
+  { role: "system", content: "Ты KOTE AI — дружелюбный, полезный разговорный помощник. Отвечай на русском языке, если пользователь пишет по-русски. Будь честным о своих возможностях." }
+];
+
+function showSection(section) {
+  const isChat = section === "chat";
+  $("videoSection").hidden = isChat;
+  $("chatSection").hidden = !isChat;
+  $("videoTab").classList.toggle("active", !isChat);
+  $("chatTab").classList.toggle("active", isChat);
+  $("videoTab").setAttribute("aria-selected", String(!isChat));
+  $("chatTab").setAttribute("aria-selected", String(isChat));
+}
+$("videoTab").addEventListener("click", () => showSection("video"));
+$("chatTab").addEventListener("click", () => showSection("chat"));
+
+function addChatMessage(role, text) {
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble " + role;
+  bubble.textContent = text;
+  bubble.style.cssText = "padding:12px 14px;border-radius:14px;max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;" +
+    (role === "user" ? "align-self:flex-end;background:#6542c8;color:white;" : "align-self:flex-start;background:#242139;color:#fff;border:1px solid #39344f;");
+  $("chatMessages").appendChild(bubble);
+  $("chatMessages").scrollTop = $("chatMessages").scrollHeight;
+  return bubble;
+}
+
+async function sendChatMessage() {
+  const input = $("chatInput");
+  const message = input.value.trim();
+  if (!message) return;
+  if (!window.puter || !puter.ai || typeof puter.ai.chat !== "function") {
+    $("chatStatus").textContent = "Не удалось загрузить сервис ИИ. Проверь интернет и обнови страницу.";
+    return;
+  }
+  input.value = "";
+  addChatMessage("user", message);
+  chatHistory.push({ role: "user", content: message });
+  $("sendChat").disabled = true;
+  $("chatStatus").textContent = "KOTE AI думает…";
+  try {
+    const response = await puter.ai.chat(chatHistory, { model: "gpt-5.4-nano" });
+    let answer = response && response.message && response.message.content;
+    if (Array.isArray(answer)) answer = answer.map(part => part.text || "").join("");
+    if (typeof answer !== "string" || !answer.trim()) {
+      throw new Error("ИИ вернул пустой ответ. Попробуй ещё раз.");
+    }
+    chatHistory.push({ role: "assistant", content: answer });
+    addChatMessage("assistant", answer);
+    $("chatStatus").textContent = "Ответ получен";
+  } catch (error) {
+    chatHistory.pop();
+    const reason = error && error.message ? error.message : String(error);
+    addChatMessage("assistant", "Не получилось получить ответ: " + reason);
+    $("chatStatus").textContent = "Ошибка подключения к ИИ";
+  } finally {
+    $("sendChat").disabled = false;
+    input.focus();
+  }
+}
+$("sendChat").addEventListener("click", sendChatMessage);
+$("chatInput").addEventListener("keydown", event => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendChatMessage();
+  }
+});
+$("clearChat").addEventListener("click", () => {
+  chatHistory.splice(1);
+  $("chatMessages").replaceChildren();
+  addChatMessage("assistant", "Чат очищен. О чём поговорим?");
+  $("chatStatus").textContent = "История текущего чата очищена";
+});
 
 function setStatus(message) { $("status").textContent = message; }
 function getClient(space, token) {
