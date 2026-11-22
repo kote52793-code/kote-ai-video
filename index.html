@@ -47,9 +47,9 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 </header>
 
 <main>
- <span class="pill">✦ KOTE AI · TWO VIDEO ENGINES</span>
+ <span class="pill">✦ KOTE AI · THREE VIDEO ENGINES</span>
  <h2>Создай своё видео</h2>
- <p class="muted">Выбери модель. Wan 2.2 работает с фотографией, CogVideoX-5B создаёт видео из текста.</p>
+ <p class="muted">Выбери модель. Wan 2.2 и Stable Video Diffusion работают с фотографией, CogVideoX-5B создаёт видео из текста.</p>
  <section class="panel">
   <label for="hfToken">Hugging Face token (для личной квоты)</label>
   <input id="hfToken" type="password" autocomplete="off" placeholder="Вставь токен hf_...">
@@ -86,6 +86,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
     <select id="model">
      <option value="wan">Wan 2.2 · фото → видео</option>
      <option value="ltx">CogVideoX-5B · текст → видео</option>
+     <option value="svd">Stable Video Diffusion 1.1 · фото → видео</option>
     </select>
    </div>
   </div>
@@ -100,7 +101,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
   <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
  </section>
 
- <p class="small">Wan 2.2 и CogVideoX-5B работают на удалённых серверах Hugging Face. CogVideoX создаёт короткое видео примерно на 3 секунды из текста. Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
+ <p class="small">Wan 2.2, CogVideoX-5B и Stable Video Diffusion работают на удалённых серверах Hugging Face. SVD создаёт ролик примерно на 4 секунды из фотографии (25 кадров). Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
@@ -109,6 +110,7 @@ import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client
 
 const WAN_SPACE = "JCisHERE/wan2-2-i2v-v3";
 const COG_SPACE = "kaidjuric/cogvideox-5b-text-to-video";
+const SVD_SPACE = "mediasynthesismuseum/stable-video-diffusion";
 const $ = id => document.getElementById(id);
 let imageFile = null;
 let videoUrl = null;
@@ -157,7 +159,7 @@ function getVideoUrl(item) {
 $("generate").addEventListener("click", async () => {
   const prompt = $("prompt").value.trim();
   const model = $("model").value;
-  if (model === "wan" && !imageFile) { alert("Для Wan 2.2 сначала загрузи фотографию"); return; }
+  if ((model === "wan" || model === "svd") && !imageFile) { alert("Для этой модели сначала загрузи фотографию"); return; }
   if (!prompt) { alert("Напиши описание движения"); return; }
 
   const button = $("generate");
@@ -165,7 +167,7 @@ $("generate").addEventListener("click", async () => {
   $("resultPanel").hidden = true;
   $("result").removeAttribute("src");
   $("download").style.display = "none";
-  setStatus("Подключаем Wan 2.2… Первый запуск может занять время.");
+  setStatus("Подключаем выбранную модель… Первый запуск может занять время.");
 
   try {
     const duration = Number($("duration").value);
@@ -178,6 +180,12 @@ $("generate").addEventListener("click", async () => {
       result = await client.predict("/generate_video", [
         await handle_file(imageFile), null, prompt, 4, "", duration,
         1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
+      ]);
+    } else if (model === "svd") {
+      const client = await getClient(SVD_SPACE, hfToken);
+      setStatus("Отправляем фото на Stable Video Diffusion 1.1… Не закрывай страницу.");
+      result = await client.predict("/video", [
+        await handle_file(imageFile), 42, true, 127, 6
       ]);
     } else {
       const client = await getClient(COG_SPACE, hfToken);
@@ -203,7 +211,7 @@ $("generate").addEventListener("click", async () => {
     $("download").href = url;
     $("download").style.display = "block";
     $("resultPanel").hidden = false;
-    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : "CogVideoX-5B") + "! Если плеер не открылся, нажми «Скачать MP4».");
+    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : model === "svd" ? "Stable Video Diffusion 1.1" : "CogVideoX-5B") + "! Если плеер не открылся, нажми «Скачать MP4».");
   } catch (error) {
     console.error(error);
     const message = error && error.message ? error.message : String(error);
