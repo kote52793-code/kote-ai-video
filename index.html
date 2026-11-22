@@ -47,9 +47,9 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 </header>
 
 <main>
- <span class="pill">✦ KOTE AI · THREE VIDEO ENGINES</span>
+ <span class="pill">✦ KOTE AI · WAN VIDEO ENGINE</span>
  <h2>Создай своё видео</h2>
- <p class="muted">Выбери модель. Wan 2.2 и Stable Video Diffusion работают с фотографией, CogVideoX-5B создаёт видео из текста.</p>
+ <p class="muted">Wan 2.2 создаёт видео из загруженной фотографии и текстового описания.</p>
  <section class="panel">
   <label for="hfToken">Hugging Face token (для личной квоты)</label>
   <input id="hfToken" type="password" autocomplete="off" placeholder="Вставь токен hf_...">
@@ -59,7 +59,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 
 
  <section class="panel" id="photoPanel">
-  <label>Загрузи фотографию (для CogVideoX не требуется)</label>
+  <label>Загрузи фотографию</label>
   <input id="photo" type="file" accept="image/jpeg,image/png,image/webp">
   <div id="fileName">JPG, PNG или WEBP · до 10 МБ</div>
   <img id="preview" class="preview">
@@ -85,8 +85,6 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
     <label>Модель</label>
     <select id="model">
      <option value="wan">Wan 2.2 · фото → видео</option>
-     <option value="ltx">CogVideoX-5B · текст → видео</option>
-     <option value="svd">Stable Video Diffusion 1.1 · фото → видео</option>
     </select>
    </div>
   </div>
@@ -101,7 +99,7 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
   <a id="download" class="download" download="kote-ai-video.mp4">⬇ Скачать MP4</a>
  </section>
 
- <p class="small">Wan 2.2, CogVideoX-5B и Stable Video Diffusion работают на удалённых серверах Hugging Face. SVD создаёт ролик примерно на 4 секунды из фотографии (25 кадров). Бесплатная очередь и GPU-лимиты могут быть заняты; доступность не гарантируется.</p>
+ <p class="small">Wan 2.2 работает на удалённом сервере Hugging Face. Бесплатная очередь и GPU-квота ограничены; генерация доступна, когда сервер и квота доступны.</p>
 </main>
 <footer>KOTE AI VIDEO © 2026</footer>
 
@@ -109,8 +107,6 @@ footer{text-align:center;color:#777;font-size:11px;padding:25px}
 import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
 
 const WAN_SPACE = "JCisHERE/wan2-2-i2v-v3";
-const COG_SPACE = "kaidjuric/cogvideox-5b-text-to-video";
-const SVD_SPACE = "mediasynthesismuseum/stable-video-diffusion";
 const $ = id => document.getElementById(id);
 let imageFile = null;
 let videoUrl = null;
@@ -159,7 +155,7 @@ function getVideoUrl(item) {
 $("generate").addEventListener("click", async () => {
   const prompt = $("prompt").value.trim();
   const model = $("model").value;
-  if ((model === "wan" || model === "svd") && !imageFile) { alert("Для этой модели сначала загрузи фотографию"); return; }
+  if (!imageFile) { alert("Сначала загрузи фотографию"); return; }
   if (!prompt) { alert("Напиши описание движения"); return; }
 
   const button = $("generate");
@@ -174,31 +170,12 @@ $("generate").addEventListener("click", async () => {
     const hfToken = $("hfToken").value.trim();
     if (hfToken && !hfToken.startsWith("hf_")) throw new Error("Токен должен начинаться с hf_.");
     let result;
-    if (model === "wan") {
-      const client = await getClient(WAN_SPACE, hfToken);
-      setStatus("Отправляем фото на сервер Wan 2.2… Не закрывай страницу.");
-      result = await client.predict("/generate_video", [
-        await handle_file(imageFile), null, prompt, 4, "", duration,
-        1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
-      ]);
-    } else if (model === "svd") {
-      const client = await getClient(SVD_SPACE, hfToken);
-      setStatus("Отправляем фото на Stable Video Diffusion 1.1… Не закрывай страницу.");
-      result = await client.predict("/video", [
-        await handle_file(imageFile), 42, true, 127, 6
-      ]);
-    } else {
-      const client = await getClient(COG_SPACE, hfToken);
-      setStatus("Подключаем CogVideoX-5B. Первый запуск может занять время…");
-      result = await client.predict("/generate", [
-        prompt,
-        30,
-        25,
-        6,
-        "",
-        -1
-      ]);
-    }
+    const client = await getClient(WAN_SPACE, hfToken);
+    setStatus("Отправляем фото на сервер Wan 2.2… Не закрывай страницу.");
+    result = await client.predict("/generate_video", [
+      await handle_file(imageFile), null, prompt, 4, "", duration,
+      1, 1, 42, true, 5, "UniPCMultistep", 3, 16, true, [], true, true
+    ]);
 
     const output = result && result.data ? result.data[0] : null;
     const url = getVideoUrl(output) || getVideoUrl(result && result.data ? result.data[1] : null);
@@ -211,7 +188,7 @@ $("generate").addEventListener("click", async () => {
     $("download").href = url;
     $("download").style.display = "block";
     $("resultPanel").hidden = false;
-    setStatus("Видео создано через " + (model === "wan" ? "Wan 2.2" : model === "svd" ? "Stable Video Diffusion 1.1" : "CogVideoX-5B") + "! Если плеер не открылся, нажми «Скачать MP4».");
+    setStatus("Видео создано через Wan 2.2! Если плеер не открылся, нажми «Скачать MP4».");
   } catch (error) {
     console.error(error);
     const message = error && error.message ? error.message : String(error);
